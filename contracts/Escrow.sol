@@ -5,7 +5,6 @@ interface IERC721 {
     function transferFrom(address _from, address _to, uint256 _id) external;
 }
 
-/// @title Escrow Contract for Fractional Real Estate Investment via ERC721
 contract Escrow {
     address public nftAddress;
     address payable public seller;

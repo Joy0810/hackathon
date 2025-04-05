@@ -1,13 +1,11 @@
 const hre = require("hardhat");
 
 async function main() {
-  // Get signers: deployer, seller, inspector, lender, and optionally buyers.
   const [deployer, seller, inspector, lender, buyer1, buyer2] = await hre.ethers.getSigners();
-
-  console.log("Deploying contracts with the account:", deployer.address);
+  console.log("Deploying with:", deployer.address);
 
   // ------------------------
-  // Deploy RealEstate Contract
+  // Deploy RealEstate (ERC721)
   // ------------------------
   const RealEstate = await hre.ethers.getContractFactory("RealEstate");
   const realEstate = await RealEstate.deploy();
@@ -15,45 +13,74 @@ async function main() {
   console.log("RealEstate deployed to:", realEstate.address);
 
   // ------------------------
-  // Mint an NFT (Property)
+  // Mint a Property NFT
   // ------------------------
-  // The seller mints the property NFT
-  const mintTxn = await realEstate.connect(seller).mint("https://token-uri.com/1");
+  const mintTxn = await realEstate.connect(seller).mint("https://token-uri.com/property1");
   await mintTxn.wait();
   console.log("NFT minted by seller:", seller.address);
 
-  // For simplicity, we assume the minted NFT has token ID 1
   const nftID = 1;
 
   // ------------------------
-  // Deploy Escrow Contract
+  // Deploy Escrow
   // ------------------------
   const Escrow = await hre.ethers.getContractFactory("Escrow");
-  const escrow = await Escrow.deploy(
-    realEstate.address,
-    seller.address,
-    inspector.address,
-    lender.address
-  );
+  const escrow = await Escrow.deploy(realEstate.address, seller.address, inspector.address, lender.address);
   await escrow.deployed();
   console.log("Escrow deployed to:", escrow.address);
 
   // ------------------------
-  // Approve NFT transfer to Escrow and List the Property
+  // Approve and List the Property
   // ------------------------
-  // Seller approves the Escrow contract to transfer the NFT
   const approveTxn = await realEstate.connect(seller).approve(escrow.address, nftID);
   await approveTxn.wait();
-  console.log("NFT approved for escrow");
+  console.log("NFT approved for Escrow");
 
-  // Set purchase price and escrow amount
-  const purchasePrice = hre.ethers.utils.parseUnits("10", "ether");
-  const escrowAmount = hre.ethers.utils.parseUnits("2", "ether");
+  const purchasePrice = hre.ethers.utils.parseEther("10"); // 10 ETH total
+  const escrowAmount = hre.ethers.utils.parseEther("2");   // Required in escrow
 
-  // Seller lists the property on the Escrow contract
   const listTxn = await escrow.connect(seller).listProperty(nftID, purchasePrice, escrowAmount);
   await listTxn.wait();
-  console.log("Property listed in escrow with purchase price:", purchasePrice.toString(), "and escrow amount:", escrowAmount.toString());
+  console.log("Property listed in escrow");
+
+  // ------------------------
+  // Buyers Invest in Property
+  // ------------------------
+  const invest1 = await escrow.connect(buyer1).investInProperty(nftID, { value: hre.ethers.utils.parseEther("4") });
+  await invest1.wait();
+  console.log("Buyer 1 invested 4 ETH");
+
+  const invest2 = await escrow.connect(buyer2).investInProperty(nftID, { value: hre.ethers.utils.parseEther("6") });
+  await invest2.wait();
+  console.log("Buyer 2 invested 6 ETH");
+
+  // ------------------------
+  // Inspection and Approvals
+  // ------------------------
+  const inspect = await escrow.connect(inspector).updateInspection(nftID, true);
+  await inspect.wait();
+  console.log("Inspection passed");
+
+  await escrow.connect(seller).approveSale(nftID);
+  await escrow.connect(lender).approveSale(nftID);
+  await escrow.connect(buyer1).approveSale(nftID);
+  await escrow.connect(buyer2).approveSale(nftID);
+  console.log("All parties approved");
+
+  // ------------------------
+  // Finalize the Sale
+  // ------------------------
+  const finalize = await escrow.connect(buyer1).finalizeSale(nftID); // anyone can call
+  await finalize.wait();
+  console.log("Sale finalized and seller paid");
+
+  // ------------------------
+  // Simulate Rental Income
+  // ------------------------
+  const rentIncome = hre.ethers.utils.parseEther("2"); // 2 ETH rent
+  const rentTx = await escrow.connect(deployer).distributeRentalIncome(nftID, { value: rentIncome });
+  await rentTx.wait();
+  console.log("Rental income distributed to fractional investors");
 }
 
 main()
