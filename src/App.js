@@ -65,6 +65,8 @@ function App() {
     setProperties(items);
   };
 
+  // i was here
+
   useEffect(() => {
     loadBlockchainData();
   }, []);
